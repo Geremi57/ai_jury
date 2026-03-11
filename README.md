@@ -2,34 +2,6 @@
 
     "One AI is a guess. Seven AIs in a room is a verdict."
 
-📋 Table of Contents
-
-    The Problem
-
-    The Solution
-
-    How It Works
-
-    The Accuracy Advantage
-
-    Features
-
-    Installation
-
-    Configuration
-
-    Usage
-
-    Project Structure
-
-    The Science Behind It
-
-    Roadmap
-
-    Contributing
-
-    License
-
 🚨 The Problem
 
 Every developer knows this pain:
@@ -219,13 +191,6 @@ Prerequisites
     OpenRouter API key (get one free)
 
     $5 credit (lasts for hundreds of debates)
-
-Quick Start
-bash
-
-## Clone the repository
-git clone https://github.com/yourusername/ai-jury.git
-cd ai-jury
 
 ## Install dependencies
 go mod tidy
