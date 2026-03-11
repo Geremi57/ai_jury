@@ -128,7 +128,7 @@ This pattern appears in 3 of your last 7 errors.
 
 ### 📊 The Accuracy Advantage
 
-We tested The AI Jury against single-model answers on 1,000 real developer errors:
+ The AI Jury against single-model answers on 1,000 real developer errors:
 Accuracy Improvement
 text
 
