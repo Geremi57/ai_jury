@@ -52,6 +52,11 @@ text
 ```
 ### ⚙️ How It Works
 
+view detailed notion notes here 
+```
+https://carbonated-mercury-761.notion.site/THE-AI-JURY-ENGINE-32339611426f809082a8d56cda6224ba?pvs=74
+```
+
 Round 1: Initial Proposals
 
 Each AI model receives the error and proposes a solution based on its unique "personality":
