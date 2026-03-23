@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The AI Jury - Live Debate</title>
+    
+    <!-- ✅ CORRECT: Use the UMD version from official docs -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+            color: #e4e4e7;
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #fff, #a855f7);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(168, 85, 247, 0.2);
+            border: 1px solid rgba(168, 85, 247, 0.5);
+            padding: 0.25rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        .error-card {
+            background: rgba(220, 38, 38, 0.1);
+            border-left: 4px solid #ef4444;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            font-family: monospace;
+        }
+
+        .error-card pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .debate-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .proposals-grid, .reviews-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .proposal-card, .review-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .proposal-card:hover, .review-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .proposal-header, .review-header {
+            padding: 1rem;
+            background: rgba(168, 85, 247, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: bold;
+        }
+
+        .proposal-header.alice, .review-header.alice {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+
+        .proposal-header.bob, .review-header.bob {
+            background: rgba(139, 92, 246, 0.2);
+            border-left: 4px solid #8b5cf6;
+        }
+
+        .proposal-content, .review-content {
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .verdict-card {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(168, 85, 247, 0.1));
+            border-radius: 1rem;
+            padding: 2rem;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            margin-top: 2rem;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #a855f7;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #a1a1aa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid rgba(168, 85, 247, 0.3);
+            border-top-color: #a855f7;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        textarea {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 0.5rem;
+            color: white;
+            font-family: monospace;
+            margin-bottom: 1rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 2rem;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .input-area {
+            background: rgba(255,255,255,0.05);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Markdown content styling */
+        .markdown-content {
+            line-height: 1.6;
+        }
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+
+        .markdown-content h1 { font-size: 1.5rem; }
+        .markdown-content h2 { font-size: 1.25rem; border-left: 3px solid #a855f7; padding-left: 0.75rem; }
+        .markdown-content h3 { font-size: 1.1rem; color: #c084fc; }
+
+        .markdown-content p {
+            margin-bottom: 0.75rem;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .markdown-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        .markdown-content code {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #f472b6;
+        }
+
+        .markdown-content pre {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 0.75rem 0;
+            border-left: 3px solid #a855f7;
+        }
+
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+            color: #10b981;
+        }
+
+        .markdown-content blockquote {
+            border-left: 3px solid #a855f7;
+            padding-left: 1rem;
+            margin: 0.75rem 0;
+            color: #a1a1aa;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚖️ THE AI JURY</h1>
+            <p>Where AI models debate until they reach the truth</p>
+            <div class="badge">Live • API Powered • Real-Time Debate</div>
+        </div>
+
+        <div class="input-area">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">🔴 Enter Your Error:</label>
+            <textarea id="errorInput" rows="3" placeholder="Example: panic: runtime error: invalid memory address or nil pointer dereference in my Go program..."></textarea>
+            <button id="debateBtn" onclick="startDebate()">⚖️ Convene The Jury</button>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>AI models are debating your error...</p>
+            <p style="font-size: 0.8rem; opacity: 0.7;">Round 1: Proposals • Round 2: Cross-examination • Round 3: Verdict</p>
+        </div>
+
+        <div id="results" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Wait for DOM and marked to load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if marked is loaded
+            if (typeof marked === 'undefined') {
+                console.error('Marked library not loaded!');
+            } else {
+                console.log('Marked loaded successfully');
+                // Configure marked
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true
+                });
+            }
+        });
+
+        async function startDebate() {
+            const errorText = document.getElementById('errorInput').value;
+            if (!errorText.trim()) {
+                alert('Please enter an error to debug');
+                return;
+            }
+
+            // Show loading, hide results
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('debateBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/debate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ error: errorText })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+                const data = await response.json();
+                console.log('API Response:', data);
+                renderResults(data);
+            } catch (error) {
+                console.error('Debate failed:', error);
+                alert('Debate failed: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('debateBtn').disabled = false;
+            }
+        }
+
+        // console.log(data.judges)
+        function renderResults(data) {
+
+            const container = document.getElementById('results');
+            container.style.display = 'block';
+            
+            // Helper function to safely render markdown
+          function safeMarkdown(content) {
+    try {
+        if (!content) {
+            content = '';
+        }
+
+        content = String(content); // 🔥 FORCE STRING
+
+        if (typeof marked !== 'undefined') {
+            return marked.parse(content);
+        }
+
+        return `<pre>${escapeHtml(content)}</pre>`;
+    } catch (e) {
+        console.error('Markdown parse error:', e, content);
+        return `<pre>${escapeHtml(String(content))}</pre>`;
+    }
+}
+            
+            let html = `
+                <div class="error-card">
+                    <strong>🔴 ERROR TO DEBUG</strong>
+                    <pre>${escapeHtml(data.error || 'No error provided')}</pre>
+                </div>
+
+                <div class="debate-section">
+                    <div class="section-title">
+                        <span class="icon">📢</span>
+                        <span>ROUND 1: Initial Proposals</span>
+                    </div>
+                    <div class="proposals-grid">
+            `;
+            
+            if (data.judges && data.judges.length) {
+                data.judges.forEach(judge => {
+                    const renderedProposal = safeMarkdown(judge.Proposal || '');
+                    html += `
+                        <div class="proposal-card">
+                            <div class="proposal-header ${judge.Name === 'Alice' ? 'alice' : 'bob'}">
+                                💡 ${escapeHtml(judge.Name || 'Unknown')}
+                                <span style="font-size: 0.8rem; opacity: 0.7; display: block;">${escapeHtml(judge.Model || 'No model')}</span>
+                            </div>
+                            <div class="proposal-content markdown-content">
+                                ${renderedProposal}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<div class="error-card">No judge proposals available</div>`;
+            }
+            
+            html += `
+                    </div>
+                </div>
+
+                <div class="debate-section">
+                    <div class="section-title">
+                        <span class="icon">🔍</span>
+                        <span>ROUND 2: Cross-Examination</span>
+                    </div>
+                    <div class="reviews-grid">
+            `;
+            
+            if (data.judges && data.judges.length) {
+                data.judges.forEach(judge => {
+                    const renderedReview = safeMarkdown(judge.Review || '');
+                    html += `
+                        <div class="review-card">
+                            <div class="review-header ${judge.Name === 'Alice' ? 'alice' : 'bob'}">
+                                🔍 ${escapeHtml(judge.Name)} reviews the other
+                            </div>
+                            <div class="review-content markdown-content">
+                                ${renderedReview}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `
+                    </div>
+                </div>
+
+                <div class="debate-section">
+                    <div class="section-title">
+                        <span class="icon">⚖️</span>
+                        <span>ROUND 3: Final Verdict</span>
+                    </div>
+                    <div class="verdict-card">
+            `;
+            
+            let fullVerdict = '';
+            if (data.verdict) {
+                fullVerdict = `## ${data.verdict.summary || 'Verdict'}\n\n${data.verdict.reasoning || ''}`;
+            } else {
+                fullVerdict = 'No verdict available';
+            }
+            const renderedVerdict = safeMarkdown(fullVerdict);
+            
+            html += `
+                        <div class="markdown-content">
+                            ${renderedVerdict}
+                        </div>
+            `;
+            
+            if (data.verdict) {
+                html += `
+                        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(34, 197, 94, 0.3);">
+                            <strong style="color: #22c55e;">✓ Consensus: ${data.verdict.consensus || 0}/${data.verdict.total_judges || 0} judges agree</strong>
+                            <br>
+                            <span style="font-size: 0.85rem; opacity: 0.7;">Confidence: ${(data.verdict.confidence || 0).toFixed(0)}% • Duration: ${data.duration || 'N/A'}</span>
+                        </div>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value">${data.judges ? data.judges.length : 0}</div>
+                        <div class="stat-label">AI Models</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.rounds || 3}</div>
+                        <div class="stat-label">Debate Rounds</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.verdict ? data.verdict.confidence.toFixed(0) : 0}%</div>
+                        <div class="stat-label">Confidence</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.duration || 'N/A'}</div>
+                        <div class="stat-label">Time to Verdict</div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+</html>
