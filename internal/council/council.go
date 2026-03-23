@@ -3,6 +3,8 @@ package council
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 	// "time"
 
 	"github.com/hra42/openrouter-go"
@@ -13,6 +15,14 @@ type Judge struct {
 	Name    string
 	Role    string
 	Model   string
+}
+
+type JudgeResponse struct {
+	Name string `json: "name"`
+	Model string `json: "model"`
+	Role string `json: "role"`
+	Proposal string `json: "proposal"`
+	Review string `json: "review"`
 }
 
 // A Proposal is one judge's answer
@@ -28,6 +38,25 @@ type Council struct {
 	APIKey    string
 }
 
+type CouncilVerdict struct {
+    Summary   string   `json:"summary"`
+    Reasoning string   `json:"reasoning"`
+    Consensus int      `json:"consensus"` // Number of judges who agreed
+    TotalJudges int    `json:"total_judges"`
+    Confidence float64 `json:"confidence"` // Percentage of consensus
+}
+
+// DebateResult is the complete API response
+type DebateResult struct {
+    Error        string         `json:"error"`
+    Judges       []JudgeResponse `json:"judges"`
+    Verdict      CouncilVerdict `json:"verdict"`
+    Rounds       int            `json:"rounds"`
+    Duration     string         `json:"duration"`
+    Timestamp    string         `json:"timestamp"`
+    ConsensusReached bool `json: "concesus_reached"`
+}
+
 // NewCouncil creates a council with two judges using STABLE OpenRouter models
 func NewCouncil(apiKey string) *Council {
 	client := openrouter.NewClient(openrouter.WithAPIKey(apiKey))
@@ -39,12 +68,12 @@ func NewCouncil(apiKey string) *Council {
 			{
 				Name:    "Alice",
 				Role:    "You give practical, working solutions. You prefer simple fixes.",
-				Model:   "openai/gpt-4o",
+				Model:   "stepfun/step-3.5-flash:free",
 			},
 			{
 				Name:    "Bob",
 				Role:    "You are thorough and cautionary. You look for edge cases and potential problems.",
-				Model:   "anthropic/claude-3.5-sonnet",
+				Model:   "nvidia/nemotron-3-super-120b-a12b:free",
 			},
 		},
 	}
@@ -177,7 +206,7 @@ Be specific but constructive. Keep your review under 150 words.
 // Round3: Reach consensus (using a third model as moderator)
 func (c *Council) Round3(ctx context.Context, errorCode string, proposals []Proposal, reviews []string) (string, error) {
 	// Use a different model as moderator for unbiased verdict
-	moderatorModel := "meta-llama/llama-4-maverick"
+	moderatorModel := "nvidia/nemotron-3-super-120b-a12b:free"
 	
 	// Format the debate history
 	debateHistory := ""
@@ -226,4 +255,112 @@ Explain why this answer is better than either individual proposal.
 	}
 	
 	return "", fmt.Errorf("no response from moderator")
+}
+
+
+// FullDebate runs all three rounds and returns structured data for API
+func (c *Council) FullDebate(ctx context.Context, errorCode string) (*DebateResult, error) {
+    startTime := time.Now()
+    
+    // Round 1: Get proposals
+    proposals, err := c.Round1(ctx, errorCode)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Round 2: Get reviews
+    reviews, err := c.Round2(ctx, errorCode, proposals)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Round 3: Get verdict
+    verdictText, err := c.Round3(ctx, errorCode, proposals, reviews)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Parse verdict into summary and reasoning
+    summary, reasoning := parseVerdict(verdictText)
+    
+    // Build judge responses
+    judges := make([]JudgeResponse, len(c.Judges))
+    for i, judge := range c.Judges {
+        judges[i] = JudgeResponse{
+            Name:     judge.Name,
+            Model:    judge.Model,
+            Role:     judge.Role,
+            Proposal: proposals[i].Content,
+            Review:   reviews[i],
+        }
+    }
+    
+    // Calculate consensus (simplified - checks if verdict mentions agreement)
+    consensus := calculateConsensus(verdictText, len(judges))
+    
+    result := &DebateResult{
+        Error:            errorCode,
+        Judges:           judges,
+        Verdict: CouncilVerdict{
+            Summary:       summary,
+            Reasoning:     reasoning,
+            Consensus:     consensus,
+            TotalJudges:   len(judges),
+            Confidence:    float64(consensus) / float64(len(judges)) * 100,
+        },
+        Rounds:           3,
+        Duration:         time.Since(startTime).String(),
+        Timestamp:        time.Now().Format(time.RFC3339),
+        ConsensusReached: consensus >= len(judges)-1,
+    }
+    
+    return result, nil
+}
+
+// Helper: Parse verdict into summary and reasoning
+func parseVerdict(verdict string) (summary, reasoning string) {
+    // Look for "COUNCIL VERDICT:" marker
+    if idx := strings.Index(verdict, "⚖️ COUNCIL VERDICT:"); idx != -1 {
+        verdict = strings.TrimSpace(verdict[idx+len("⚖️ COUNCIL VERDICT:"):])
+    }
+    
+    // Try to split by newlines for a simple summary (first 2-3 lines)
+    lines := strings.Split(verdict, "\n")
+    if len(lines) > 0 {
+        summary = strings.TrimSpace(lines[0])
+        if len(lines) > 1 {
+            reasoning = strings.TrimSpace(strings.Join(lines[1:], "\n"))
+        }
+    }
+    
+    if summary == "" {
+        summary = verdict[:min(200, len(verdict))]
+        reasoning = verdict
+    }
+    
+    return summary, reasoning
+}
+
+// Helper: Calculate consensus from verdict
+func calculateConsensus(verdict string, totalJudges int) int {
+    verdictLower := strings.ToLower(verdict)
+    
+    // Count how many judges are mentioned as agreeing
+    consensus := 0
+    if strings.Contains(verdictLower, "both") || strings.Contains(verdictLower, "all") {
+        consensus = totalJudges
+    } else if strings.Contains(verdictLower, "agrees") || strings.Contains(verdictLower, "consensus") {
+        consensus = totalJudges - 1
+    } else {
+        consensus = totalJudges // Assume agreement if not specified
+    }
+    
+    return consensus
+}
+
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
 }
