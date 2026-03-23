@@ -31,7 +31,7 @@ in my Go program. It happens when I try to write to a channel.
 	`
 
 	fmt.Println("\n⚖️  COUNCIL OF AI CONVENED (via OpenRouter)")
-	fmt.Println("==========================================")
+	// fmt.Println("==========================================")
 	fmt.Printf("Error: %.100s...\n\n", errorCode)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
