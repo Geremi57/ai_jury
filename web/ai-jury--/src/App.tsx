@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface Judge {
-  name: string;
-  model: string;
-  role?: string;
-  proposal?: string;
-  review?: string;
+  Name: string;
+  Model: string;
+  Role?: string;
+  Proposal?: string;
+  Review?: string;
 }
 
 interface DebateResponse {
@@ -28,12 +28,31 @@ interface DebateResponse {
   consensus_reached?: boolean;
 }
 
+interface Step {
+  id: string;
+  title: string;
+  status: 'pending' | 'loading' | 'done' | 'error';
+  detail?: string;
+  timestamp?: string;
+}
+
 const App: React.FC = () => {
   const [errorText, setErrorText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [debateResult, setDebateResult] = useState<DebateResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [expandedProposals, setExpandedProposals] = useState<Record<string, boolean>>({});
   const [expandedReviews, setExpandedReviews] = useState<Record<string, boolean>>({});
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [showFinalVerdict, setShowFinalVerdict] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  const toggleProposal = (judgeName: string) => {
+    setExpandedProposals(prev => ({
+      ...prev,
+      [judgeName]: !prev[judgeName]
+    }));
+  };
 
   const toggleReview = (judgeName: string) => {
     setExpandedReviews(prev => ({
@@ -42,6 +61,16 @@ const App: React.FC = () => {
     }));
   };
 
+  // const addStep = (id: string, title: string, status: Step['status'] = 'pending', detail?: string) => {
+  //   setSteps(prev => [...prev, { id, title, status, detail, timestamp: new Date().toLocaleTimeString() }]);
+  // };
+
+  // const updateStep = (id: string, status: Step['status'], detail?: string) => {
+  //   setSteps(prev => prev.map(step => 
+  //     step.id === id ? { ...step, status, detail: detail || step.detail } : step
+  //   ));
+  // };
+
   const startDebate = async () => {
     if (!errorText.trim()) {
       setErrorMessage('Please enter an error to debug');
@@ -49,12 +78,22 @@ const App: React.FC = () => {
       return;
     }
 
+    // Reset state
     setIsLoading(true);
     setDebateResult(null);
     setErrorMessage('');
+    setExpandedProposals({});
     setExpandedReviews({});
+    setSteps([]);
+    setShowFinalVerdict(false);
 
     try {
+      // Simulate real-time SSE or WebSocket would be better, but for now we'll simulate
+      // In a real implementation, you'd use Server-Sent Events or WebSockets
+      
+      // For demo purposes, we'll simulate the steps based on what the backend returns
+      // But ideally, your backend should stream these events
+      
       const response = await fetch('/api/debate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,10 +105,46 @@ const App: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log(data);
+      
+      // After getting the data, we can build the steps from the judges
+      // Since the backend doesn't stream, we'll create steps based on the result
+      const newSteps: Step[] = [];
+      
+      // Round 1 steps - Proposals
+      data.judges.forEach((judge: Judge) => {
+        newSteps.push({
+          id: `proposal-${judge.Name}`,
+          title: `${judge.Name} submitted a proposal`,
+          status: 'done',
+          timestamp: new Date().toLocaleTimeString()
+        });
+      });
+      
+      // Round 2 steps - Reviews
+      data.judges.forEach((judge: Judge) => {
+        newSteps.push({
+          id: `review-${judge.Name}`,
+          title: `${judge.Name} reviewed the others`,
+          status: 'done',
+          timestamp: new Date().toLocaleTimeString()
+        });
+      });
+      
+      // Verdict step
+      newSteps.push({
+        id: 'verdict',
+        title: 'Reached final verdict',
+        status: 'done',
+        timestamp: new Date().toLocaleTimeString()
+      });
+      
+      setSteps(newSteps);
       setDebateResult(data);
+      setShowFinalVerdict(true);
       
       setTimeout(() => {
-        document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     } catch (error) {
       console.error('Debate failed:', error);
@@ -99,15 +174,15 @@ const App: React.FC = () => {
     }
   };
 
-  const getJudgeGradient = (name: string) => {
-    const gradients: Record<string, string> = {
-      'Alice': 'from-blue-500 to-blue-600',
-      'Bob': 'from-purple-500 to-purple-600',
-      'Charlie': 'from-emerald-500 to-emerald-600',
-      'Diana': 'from-pink-500 to-pink-600',
-      'Eve': 'from-orange-500 to-orange-600'
+  const getJudgeColor = (name: string) => {
+    const colors: Record<string, string> = {
+      'Alice': 'text-blue-400 border-blue-500',
+      'Bob': 'text-purple-400 border-purple-500',
+      'Charlie': 'text-emerald-400 border-emerald-500',
+      'Diana': 'text-pink-400 border-pink-500',
+      'Eve': 'text-orange-400 border-orange-500'
     };
-    return gradients[name] || 'from-gray-500 to-gray-600';
+    return colors[name] || 'text-gray-400 border-gray-500';
   };
 
   return (
@@ -119,7 +194,7 @@ const App: React.FC = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-float" style={{ animationDelay: '-4s' }}></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         
         {/* Header */}
         <div className="text-center mb-12">
@@ -127,22 +202,16 @@ const App: React.FC = () => {
             <span className="text-2xl">⚖️</span>
             <span className="text-sm font-mono text-purple-300">v2.0.0</span>
           </div>
-          <h1 className="text-6xl sm:text-7xl font-bold mb-4 bg-gradient-to-r from-white via-purple-400 to-pink-400 bg-clip-text text-transparent animate-gradient">
+          <h1 className="text-5xl sm:text-6xl font-bold mb-4 bg-gradient-to-r from-white via-purple-400 to-pink-400 bg-clip-text text-transparent animate-gradient">
             THE AI JURY
           </h1>
-          <p className="text-xl text-gray-300 mb-6 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-300 mb-6 max-w-2xl mx-auto">
             Where AI models debate until they reach the truth
           </p>
-          <div className="flex flex-wrap justify-center gap-3 text-sm">
-            <span className="px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/50">⚡ GPT-4o</span>
-            <span className="px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/50">🎯 Claude 3.5</span>
-            <span className="px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/50">🔍 Gemini Flash</span>
-            <span className="px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/50">💡 Mixtral</span>
-          </div>
         </div>
 
         {/* Input Area */}
-        <div className="max-w-4xl mx-auto mb-12">
+        <div className="mb-12">
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 shadow-2xl">
             <label className="block text-sm font-medium text-purple-300 mb-2">
               🔴 Enter Your Error
@@ -150,33 +219,28 @@ const App: React.FC = () => {
             <textarea
               value={errorText}
               onChange={(e) => setErrorText(e.target.value)}
-              rows={4}
-              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
+              rows={3}
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono text-sm"
               placeholder="panic: runtime error: invalid memory address or nil pointer dereference in my Go program when writing to a channel..."
             />
             
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-xs text-gray-400">
-                💡 Try: TypeScript errors, Go panics, React hydration issues, Python exceptions...
-              </div>
+            <div className="flex items-center justify-end mt-4">
               <button
                 onClick={startDebate}
                 disabled={isLoading}
-                className="group relative px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-semibold text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
-                <span className="relative z-10 flex items-center gap-2">
-                  {!isLoading ? (
-                    '⚖️ Convene The Jury'
-                  ) : (
-                    <>
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Models Deliberating...
-                    </>
-                  )}
-                </span>
+                {!isLoading ? (
+                  '⚖️ Convene The Jury'
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Deliberating...
+                  </span>
+                )}
               </button>
             </div>
             
@@ -188,186 +252,231 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-12 text-center border border-white/10">
-              <div className="relative w-24 h-24 mx-auto mb-6">
-                <div className="absolute inset-0 border-4 border-purple-500/30 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-purple-500 rounded-full animate-ping"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-4xl">⚖️</div>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">The Council Is Deliberating</h3>
-              <p className="text-gray-400">3 rounds • 5 models • Cross-examination in progress</p>
-              <div className="mt-6 flex justify-center gap-4 text-sm text-purple-400">
-                <span className="animate-pulse">📢 Round 1: Proposals</span>
-                <span>→</span>
-                <span className="opacity-50">🔍 Round 2: Critique</span>
-                <span>→</span>
-                <span className="opacity-50">⚖️ Round 3: Verdict</span>
+        {/* Real-time Progress Steps */}
+        {(steps.length > 0 || isLoading) && (
+          <div className="mb-8">
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+              <h3 className="text-sm font-semibold text-purple-300 mb-4 flex items-center gap-2">
+                <span className="text-lg">⚡</span>
+                Debate Progress
+              </h3>
+              <div className="space-y-2">
+                {steps.map((step) => (
+                  <div key={step.id} className="flex items-center gap-3 text-sm">
+                    <div className="w-5">
+                      {step.status === 'done' && (
+                        <span className="text-green-400 text-xs">✓</span>
+                      )}
+                      {step.status === 'loading' && (
+                        <svg className="animate-spin h-4 w-4 text-purple-400" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      )}
+                      {step.status === 'pending' && (
+                        <span className="text-gray-500 text-xs">○</span>
+                      )}
+                    </div>
+                    <span className={`flex-1 ${step.status === 'done' ? 'text-gray-300' : step.status === 'loading' ? 'text-white' : 'text-gray-500'}`}>
+                      {step.title}
+                    </span>
+                    {step.status === 'loading' && (
+                      <div className="w-32 h-1 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-500 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                      </div>
+                    )}
+                    {step.status === 'done' && step.timestamp && (
+                      <span className="text-xs text-gray-500">{step.timestamp}</span>
+                    )}
+                  </div>
+                ))}
+                {isLoading && steps.length === 0 && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <svg className="animate-spin h-4 w-4 text-purple-400" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span className="text-gray-300">Initializing debate...</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Results */}
-        {debateResult && !isLoading && (
-          <div id="results" className="max-w-6xl mx-auto animate-fade-in-up">
-            
-            {/* Error Card */}
-            <div className="mb-8 bg-gradient-to-r from-red-500/10 to-red-600/10 backdrop-blur-sm rounded-xl p-6 border-l-4 border-red-500">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xl">🔴</span>
-                <span className="font-semibold text-red-400">Error to Debug</span>
-              </div>
-              <pre className="font-mono text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto">
-                {debateResult.error}
-              </pre>
-            </div>
-
-            {/* Round 1: Proposals */}
-            <div className="mb-12">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-3xl">📢</span>
-                <h2 className="text-2xl font-bold text-white">Round 1: Initial Proposals</h2>
-                <span className="text-xs px-2 py-1 bg-purple-500/20 rounded-full">
-                  {debateResult.judges.length} judges
+        {/* Final Verdict - Displayed prominently */}
+        {debateResult && showFinalVerdict && (
+          <div ref={resultsRef} className="mb-8 animate-fade-in-up">
+            <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm rounded-2xl p-8 border border-purple-500/40 shadow-2xl">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-3xl">⚖️</span>
+                <h2 className="text-2xl font-bold text-white">Final Verdict</h2>
+                <span className="ml-auto px-3 py-1 bg-green-500/20 rounded-full text-xs text-green-300">
+                  {debateResult.verdict?.consensus}/{debateResult.verdict?.total_judges} agreed
                 </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {debateResult.judges.map((judge, idx) => (
-                  <div
-                    key={idx}
-                    className="group bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10 hover:border-purple-500/50 transition-all hover:-translate-y-1"
+              
+              <div className="prose prose-invert max-w-none text-gray-200">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={MarkdownComponents}
+                >
+                  {(debateResult.verdict?.summary || '') + '\n\n' + (debateResult.verdict?.reasoning || '')}
+                </ReactMarkdown>
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-purple-500/30 flex flex-wrap justify-between items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <span className="text-sm">✓</span>
+                  </div>
+                  <div>
+                    <div className="font-medium text-white">
+                      {debateResult.verdict?.consensus}/{debateResult.verdict?.total_judges} judges agree
+                    </div>
+                    <div className="text-gray-400 text-xs">Consensus reached after debate</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-xl font-bold text-purple-400">
+                      {debateResult.verdict?.confidence?.toFixed(0) || 0}%
+                    </div>
+                    <div className="text-gray-400 text-xs">Confidence</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-mono text-gray-300">{debateResult.duration}</div>
+                    <div className="text-gray-400 text-xs">Time to verdict</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsible Proposals (Optional - can be expanded if user wants details) */}
+        {debateResult && showFinalVerdict && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm text-gray-400">💡</span>
+              <button
+                onClick={() => {
+                  const allExpanded = Object.keys(expandedProposals).length === debateResult.judges.length;
+                  if (allExpanded) {
+                    setExpandedProposals({});
+                  } else {
+                    const expanded: Record<string, boolean> = {};
+                    debateResult.judges.forEach(j => { expanded[j.Name] = true; });
+                    setExpandedProposals(expanded);
+                  }
+                }}
+                className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                {Object.keys(expandedProposals).length === debateResult.judges.length ? 'Collapse all' : 'Expand all'}
+              </button>
+            </div>
+            
+            {debateResult.judges.map((judge) => (
+              <div key={judge.Name} className="bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10">
+                <button
+                  onClick={() => toggleProposal(judge.Name)}
+                  className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`text-lg ${getJudgeColor(judge.Name).split(' ')[0]}`}>💡</span>
+                    <div className="text-left">
+                      <span className="font-medium text-white">{judge.Name}</span>
+                      <span className="text-xs text-gray-400 ml-2">proposed a solution</span>
+                    </div>
+                  </div>
+                  <span className="text-gray-400">
+                    {expandedProposals[judge.Name] ? '▼' : '▶'}
+                  </span>
+                </button>
+                
+                {expandedProposals[judge.Name] && (
+                  <div className="p-4 pt-0 border-t border-white/10 mt-2 animate-fade-in">
+                    <div className="prose prose-invert max-w-none text-gray-300 text-sm">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={MarkdownComponents}
+                      >
+                        {judge.Proposal || 'No proposal provided'}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Reviews Section */}
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-gray-400">🔍</span>
+                <button
+                  onClick={() => {
+                    const allExpanded = Object.keys(expandedReviews).length === debateResult.judges.length;
+                    if (allExpanded) {
+                      setExpandedReviews({});
+                    } else {
+                      const expanded: Record<string, boolean> = {};
+                      debateResult.judges.forEach(j => { expanded[j.Name] = true; });
+                      setExpandedReviews(expanded);
+                    }
+                  }}
+                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  {Object.keys(expandedReviews).length === debateResult.judges.length ? 'Collapse all reviews' : 'Expand all reviews'}
+                </button>
+              </div>
+              
+              {debateResult.judges.map((judge) => (
+                <div key={`review-${judge.Name}`} className="bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10 mb-3">
+                  <button
+                    onClick={() => toggleReview(judge.Name)}
+                    className="w-full p-3 flex items-center justify-between hover:bg-white/5 transition-colors"
                   >
-                    <div className={`p-4 bg-gradient-to-r ${getJudgeGradient(judge.name)} bg-opacity-30 border-b border-white/10`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-bold text-white text-lg">{judge.name}</h3>
-                          <p className="text-xs text-gray-400 font-mono mt-1">{judge.model}</p>
-                        </div>
-                        <span className="text-2xl opacity-50">💡</span>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-base ${getJudgeColor(judge.Name).split(' ')[0]}`}>🔍</span>
+                      <div className="text-left">
+                        <span className="font-medium text-white text-sm">{judge.Name}</span>
+                        <span className="text-xs text-gray-400 ml-2">reviewed the others</span>
                       </div>
                     </div>
-                    <div className="p-5">
-                      {/* FIX: Wrap ReactMarkdown in div with className */}
-                      <div className="prose prose-invert max-w-none text-gray-300">
+                    <span className="text-gray-400 text-sm">
+                      {expandedReviews[judge.Name] ? '▼' : '▶'}
+                    </span>
+                  </button>
+                  
+                  {expandedReviews[judge.Name] && (
+                    <div className="p-3 pt-0 border-t border-white/10 mt-2 animate-fade-in">
+                      <div className="prose prose-invert max-w-none text-gray-300 text-sm">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={MarkdownComponents}
                         >
-                          {judge.proposal || 'No proposal provided'}
+                          {judge.Review || 'No review available'}
                         </ReactMarkdown>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Round 2: Cross-Examination with Collapsible Reviews */}
-            <div className="mb-12">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-3xl">🔍</span>
-                <h2 className="text-2xl font-bold text-white">Round 2: Cross-Examination</h2>
-                <span className="text-xs px-2 py-1 bg-purple-500/20 rounded-full">
-                  Click to review critiques
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {debateResult.judges.map((judge, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white/5 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10 transition-all"
-                  >
-                    <button
-                      onClick={() => toggleReview(judge.name)}
-                      className="w-full p-4 bg-gradient-to-r from-gray-700/50 to-gray-800/50 hover:from-gray-600/50 hover:to-gray-700/50 transition-all border-b border-white/10 flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">🔍</span>
-                        <span className="font-semibold text-white">{judge.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">reviews the others</span>
-                      </div>
-                      <span className="text-gray-400 group-hover:text-purple-400 transition-colors">
-                        {expandedReviews[judge.name] ? '▼' : '▶'}
-                      </span>
-                    </button>
-                    
-                    {expandedReviews[judge.name] && (
-                      <div className="p-5 animate-fade-in">
-                        {/* FIX: Wrap ReactMarkdown in div with className */}
-                        <div className="prose prose-invert max-w-none text-gray-300">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={MarkdownComponents}
-                          >
-                            {judge.review || 'No review available'}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Round 3: Final Verdict */}
-            <div className="mb-12">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-3xl">⚖️</span>
-                <h2 className="text-2xl font-bold text-white">Round 3: Final Verdict</h2>
-              </div>
-              <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm rounded-2xl p-8 border border-purple-500/30 shadow-2xl">
-                {/* FIX: Wrap ReactMarkdown in div with className */}
-                <div className="prose prose-invert max-w-none text-gray-300 text-lg">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={MarkdownComponents}
-                  >
-                    {(debateResult.verdict?.summary || '') + '\n\n' + (debateResult.verdict?.reasoning || '')}
-                  </ReactMarkdown>
+                  )}
                 </div>
-                
-                <div className="mt-6 pt-6 border-t border-purple-500/30 flex flex-wrap justify-between items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                      <span className="text-2xl">✓</span>
-                    </div>
-                    <div>
-                      <div className="font-bold text-white">
-                        {debateResult.verdict?.consensus}/{debateResult.verdict?.total_judges} judges agree
-                      </div>
-                      <div className="text-sm text-gray-400">Consensus reached after debate</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-purple-400">
-                      {debateResult.verdict?.confidence?.toFixed(0) || 0}%
-                    </div>
-                    <div className="text-xs text-gray-400">Confidence Score</div>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* Stats Footer */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-white/10">
-              <div className="text-center p-4 bg-white/5 rounded-xl">
-                <div className="text-2xl font-bold text-purple-400">{debateResult.judges?.length || 0}</div>
-                <div className="text-xs text-gray-400">AI Models</div>
+            {/* Stats Footer - Minimal */}
+            <div className="grid grid-cols-3 gap-3 mt-6 pt-4 border-t border-white/10">
+              <div className="text-center py-2">
+                <div className="text-lg font-bold text-purple-400">{debateResult.judges?.length || 0}</div>
+                <div className="text-xs text-gray-500">AI Models</div>
               </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
-                <div className="text-2xl font-bold text-purple-400">{debateResult.rounds || 3}</div>
-                <div className="text-xs text-gray-400">Debate Rounds</div>
+              <div className="text-center py-2">
+                <div className="text-lg font-bold text-purple-400">{debateResult.rounds || 3}</div>
+                <div className="text-xs text-gray-500">Debate Rounds</div>
               </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
-                <div className="text-2xl font-bold text-purple-400">{debateResult.verdict?.confidence?.toFixed(0) || 0}%</div>
-                <div className="text-xs text-gray-400">Confidence</div>
-              </div>
-              <div className="text-center p-4 bg-white/5 rounded-xl">
-                <div className="text-2xl font-bold text-purple-400">{debateResult.duration || 'N/A'}</div>
-                <div className="text-xs text-gray-400">Time to Verdict</div>
+              <div className="text-center py-2">
+                <div className="text-lg font-bold text-purple-400">{debateResult.duration || 'N/A'}</div>
+                <div className="text-xs text-gray-500">Duration</div>
               </div>
             </div>
           </div>
@@ -392,7 +501,8 @@ const App: React.FC = () => {
         
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-gradient { animation: gradient 3s ease infinite; }
-        .animate-fade-in-up { animation: fade-in-up 0.6s ease-out; }
+        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
+        .animate-fade-in { animation: fade-in-up 0.2s ease-out; }
         .animate-spin { animation: spin 1s linear infinite; }
         
         @keyframes spin {
