@@ -6,6 +6,8 @@ import (
     "log"
     "net/http"
     "os"
+    "path/filepath"
+    "strings"
     "time"
 
     "github.com/gorilla/mux"
@@ -77,8 +79,29 @@ func main() {
         json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
     }).Methods("GET")
     
-    // Static file server for frontend
-    r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web")))
+    // ✅ Serve React static files
+    // Path to your built React app (Vite outputs to 'dist' by default)
+    staticPath := "./web/ai-jury--/dist"
+    
+    // Check if the dist directory exists
+    if _, err := os.Stat(staticPath); os.IsNotExist(err) {
+        log.Printf("⚠️  Warning: React build not found at %s", staticPath)
+        log.Printf("   Run 'npm run build' in web/ai-jury-- first")
+    }
+    
+    // Serve static files
+    r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join(staticPath, "assets")))))
+    
+    // Handle all other routes with SPA fallback (serve index.html)
+    r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Don't interfere with API routes
+        if strings.HasPrefix(r.URL.Path, "/api") {
+            return
+        }
+        
+        // Serve index.html for all non-API routes (SPA behavior)
+        http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
+    })
     
     // CORS middleware
     handler := cors.Default().Handler(r)
@@ -92,7 +115,7 @@ func main() {
     log.Printf("🚀 API server starting on http://localhost:%s", port)
     log.Printf("   POST /api/debate - Run a debate")
     log.Printf("   GET  /health - Health check")
-    log.Printf("   / - Static files from ./web")
+    log.Printf("   📁 Serving React app from: %s", staticPath)
     
     log.Fatal(http.ListenAndServe(":"+port, handler))
 }
