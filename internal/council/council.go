@@ -73,7 +73,7 @@ func NewCouncil(apiKey string) *Council {
 			{
 				Name:    "Bob",
 				Role:    "You are thorough and cautionary. You look for edge cases and potential problems.",
-				Model:   "nvidia/nemotron-3-super-120b-a12b:free",
+				Model:   "stepfun/step-3.5-flash:free",
 			},
 		},
 	}
