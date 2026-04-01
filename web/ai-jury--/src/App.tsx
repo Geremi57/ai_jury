@@ -111,7 +111,6 @@ const App: React.FC = () => {
     }));
   };
 // Add this to your startDebate function in App.tsx
-
 const startDebate = async () => {
     if (!errorText.trim()) {
         setErrorMessage('Please enter an error to debug');
@@ -119,7 +118,6 @@ const startDebate = async () => {
         return;
     }
 
-    // Reset state
     setIsLoading(true);
     setDebateResult(null);
     setErrorMessage('');
@@ -129,84 +127,39 @@ const startDebate = async () => {
     setShowFinalVerdict(false);
     setRound('proposals');
 
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-        console.log('Request timeout - aborting');
-        controller.abort();
-        setErrorMessage('Debate is taking too long. The models might be slow. Please try again.');
-        setIsLoading(false);
-    }, 300000); // 5 minute timeout (increased)
-
     try {
-        console.log('Starting debate stream...');
-        
-        const response = await fetch('/api/debate/stream', {
+        // Start the debate and get a session ID
+        const startResponse = await fetch('/api/debate/start', {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Connection': 'keep-alive',  // Add keep-alive header
-            },
-            body: JSON.stringify({ error: errorText }),
-            signal: controller.signal
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: errorText })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        const { sessionId } = await startResponse.json();
 
-        console.log('Stream connected, reading events...');
+        // Poll for updates every 2 seconds
+        const pollInterval = setInterval(async () => {
+            const pollResponse = await fetch(`/api/debate/status/${sessionId}`);
+            const updates = await pollResponse.json();
+            
+            // Process updates
+            updates.events.forEach((event: StreamEvent) => {
+                handleStreamEvent(event);
+            });
+            
+            // Check if debate is complete
+            if (updates.complete) {
+                clearInterval(pollInterval);
+                setIsLoading(false);
+            }
+        }, 2000);
         
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let lastEventTime = Date.now();
-        console.log(lastEventTime)
-
-        if (!reader) {
-            throw new Error('No reader available');
-        }
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                console.log('Stream ended by server');
-                break;
-            }
-
-            // Update last event time to prevent timeout
-            lastEventTime = Date.now();
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const event: StreamEvent = JSON.parse(line.slice(6));
-                        handleStreamEvent(event);
-                    } catch (e) {
-                        console.error('Failed to parse event:', e);
-                    }
-                }
-            }
-        }
-    } catch (error: any) {
+    } catch (error) {
         console.error('Debate failed:', error);
-        if (error.name === 'AbortError') {
-            setErrorMessage('The debate is taking too long. This can happen when AI models are busy. Please try again.');
-        } else if (error.message.includes('network')) {
-            setErrorMessage('Network error. Please check your connection and try again.');
-        } else {
-            setErrorMessage('Failed to convene the jury. Please try again.');
-        }
-    } finally {
-        clearTimeout(timeoutId);
+        setErrorMessage('Failed to convene the jury. Please try again.');
         setIsLoading(false);
     }
 };
-
   const handleStreamEvent = (event: StreamEvent) => {
     console.log('Stream event:', event);
 
