@@ -352,7 +352,7 @@ func (c *Council) callWithTimeout(ctx context.Context, model string, messages []
         openrouter.WithModel(model),
         openrouter.WithTemperature(0.7),
         openrouter.WithMaxTokens(500),
-    )
+    )       
     
     if err != nil {
         return nil, err
