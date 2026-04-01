@@ -68,9 +68,10 @@ r.HandleFunc("/api/debate/stream", func(w http.ResponseWriter, r *http.Request) 
     
     // Monitor client disconnect
     clientGone := r.Context().Done()
+
     
     // Start a keep-alive ping goroutine
-    pingTicker := time.NewTicker(15 * time.Second)
+    pingTicker := time.NewTicker(20 * time.Second)
     defer pingTicker.Stop()
     
     go func() {
