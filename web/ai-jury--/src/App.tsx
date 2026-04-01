@@ -129,7 +129,7 @@ const startDebate = async () => {
 
     try {
         // Start the debate and get a session ID
-        const startResponse = await fetch('/api/debate/start', {
+        const startResponse = await fetch('/api/debate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: errorText })
