@@ -109,15 +109,14 @@ const App: React.FC = () => {
       ...prev,
       [judgeName]: !prev[judgeName]
     }));
-  };
-// Add this to your startDebate function in App.tsx
-const startDebate = async () => {
+  };const startDebate = async () => {
     if (!errorText.trim()) {
         setErrorMessage('Please enter an error to debug');
         setTimeout(() => setErrorMessage(''), 3000);
         return;
     }
 
+    // Reset all state
     setIsLoading(true);
     setDebateResult(null);
     setErrorMessage('');
@@ -128,40 +127,73 @@ const startDebate = async () => {
     setRound('proposals');
 
     try {
-        // Start the debate and get a session ID
-        const startResponse = await fetch('/api/debate', {
+        console.log('🚀 Starting debate stream for:', errorText);
+        
+        // Make the streaming request
+        const response = await fetch('/api/debate/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+            },
             body: JSON.stringify({ error: errorText })
         });
 
-        const { sessionId } = await startResponse.json();
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
 
-        // Poll for updates every 2 seconds
-        const pollInterval = setInterval(async () => {
-            const pollResponse = await fetch(`/api/debate/status/${sessionId}`);
-            const updates = await pollResponse.json();
-            
-            // Process updates
-            updates.events.forEach((event: StreamEvent) => {
-                handleStreamEvent(event);
-            });
-            
-            // Check if debate is complete
-            if (updates.complete) {
-                clearInterval(pollInterval);
-                setIsLoading(false);
-            }
-        }, 2000);
+        console.log('📡 Stream connected, reading events...');
         
-    } catch (error) {
-        console.error('Debate failed:', error);
-        setErrorMessage('Failed to convene the jury. Please try again.');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        if (!reader) {
+            throw new Error('No reader available');
+        }
+
+        // Read events from the stream
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                console.log('🏁 Stream ended by server');
+                break;
+            }
+
+            // Decode and process the chunk
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const eventData = line.slice(6);
+                        const event: StreamEvent = JSON.parse(eventData);
+                        console.log('📨 Received event:', event.type, event.message);
+                        handleStreamEvent(event);
+                    } catch (e) {
+                        console.error('Failed to parse event:', line, e);
+                    }
+                } else if (line.startsWith(': ')) {
+                    // This is a keep-alive comment, ignore
+                    console.log('💓 Keep-alive received');
+                }
+            }
+        }
+        
+    } catch (error: any) {
+        console.error('❌ Debate failed:', error);
+        setErrorMessage(error.message || 'Failed to convene the jury. Please try again.');
         setIsLoading(false);
     }
 };
+
   const handleStreamEvent = (event: StreamEvent) => {
-    console.log('Stream event:', event);
+   console.log('📨 handleStreamEvent called:', event.type, event.message);
 
     switch (event.type) {
       case 'proposal':
