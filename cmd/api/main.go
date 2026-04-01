@@ -54,7 +54,8 @@ r.HandleFunc("/api/debate/stream", func(w http.ResponseWriter, r *http.Request) 
     w.Header().Set("Cache-Control", "no-cache")
     w.Header().Set("Connection", "keep-alive")
     w.Header().Set("Access-Control-Allow-Origin", "*")
-    w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+    w.Header().Set("X-Accel-Buffering", "no")
+    w.Header().Set("Transfer-Encoding", "chunked")
     
     flusher, ok := w.(http.Flusher)
     if !ok {
@@ -62,6 +63,7 @@ r.HandleFunc("/api/debate/stream", func(w http.ResponseWriter, r *http.Request) 
         return
     }
     
+    flusher.Flush()
     // Create a context with a longer timeout (5 minutes)
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
     defer cancel()
