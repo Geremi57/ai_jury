@@ -150,7 +150,7 @@ func min(a, b int) int {
 func NewCouncil(apiKey string) *Council {
 	client := openrouter.NewClient(
 		openrouter.WithAPIKey(apiKey),
-		openrouter.WithTimeout(60*time.Second),
+		openrouter.WithTimeout(120*time.Second),
 	)
 
 	return &Council{
@@ -274,14 +274,7 @@ Be specific but constructive. Keep your review under 150 words.
 				},
 			}
 
-			resp, err := c.Client.ChatComplete(
-				ctx,
-				messages,
-				openrouter.WithModel(j.Model),
-				openrouter.WithTemperature(0.7),
-				openrouter.WithMaxTokens(500),
-			)
-
+			resp, err := c.callWithTimeout(ctx, j.Model, messages, 55*time.Second)
 			if err != nil {
 				log.Printf("Review for %s failed: %v", j.Name, err)
 				mu.Lock()
@@ -334,13 +327,7 @@ Explain why this answer is better than either individual proposal.
 		},
 	}
 
-	resp, err := c.Client.ChatComplete(
-		ctx,
-		messages,
-		openrouter.WithModel(moderatorModel),
-		openrouter.WithTemperature(0.5),
-		openrouter.WithMaxTokens(800),
-	)
+	    resp, err := c.callWithTimeout(ctx, moderatorModel, messages, 55*time.Second)
 
 	if err != nil {
 		return "", err
